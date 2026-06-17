@@ -1,0 +1,47 @@
+name: CD
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_to_staging:
+        description: 'Deploy to staging environment'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Docker Image
+        run: |
+          docker build -t module5-ci:latest .
+
+      - name: Login to Docker Registry
+        if: inputs.deploy_to_staging
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+      - name: Push and Deploy
+        if: inputs.deploy_to_staging
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          IMAGE_TAG=$(date +%Y%m%d%H%M%S)
+          docker tag module5-ci:latest $DOCKER_USERNAME/module5:staging-$IMAGE_TAG
+          docker push $DOCKER_USERNAME/module5:staging-$IMAGE_TAG
+          echo "Deployed: $DOCKER_USERNAME/module5:staging-$IMAGE_TAG"
