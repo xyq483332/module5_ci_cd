@@ -1,0 +1,43 @@
+name: CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Lint
+        run: npm run lint
+
+      - name: Run Tests
+        run: npm test
+
+      - name: Build Docker Image
+        run: |
+          docker build -t module5-ci:latest .
+
+      - name: Notify PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ CI pipeline completed successfully!'
+            })
