@@ -11,15 +11,64 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
       - name: Install Dependencies
         run: npm ci
+
       - name: Run Lint
         run: npm run lint
+
       - name: Run Tests
         run: npm test
+
       - name: Build Docker Image
-        run: docker build -t module5-ci:latest .
+        run: |
+          docker build -t module5-ci:latest .
+
+      - name: Login to Docker Registry
+        if: env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != ''
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+      - name: Push Image to Staging Registry
+        if: env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != ''
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          IMAGE_TAG=$(date +%Y%m%d%H%M%S)
+          docker tag module5-ci:latest registry.stark.com/module5:staging-$IMAGE_TAG
+          docker push registry.stark.com/module5:staging-$IMAGE_TAG
+
+      - name: Deploy to Staging Environment
+        if: env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != ''
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519_nas xyq483332@192.168.1.3 << 'EOF'
+            cd /volume1/docker/module5
+            docker pull registry.stark.com/module5:staging-$(date +%Y%m%d%H%M%S)
+            docker-compose pull
+            docker-compose up -d
+          EOF
+
+      - name: Notify Completion
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Module 5 CI/CD pipeline completed and deployed to staging.'
+            })
