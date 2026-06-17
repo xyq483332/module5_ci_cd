@@ -38,7 +38,7 @@ jobs:
           docker build -t module5-ci:latest .
 
       - name: Login to Docker Registry
-        if: inputs.deploy_to_staging && secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_to_staging && secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -46,12 +46,15 @@ jobs:
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 
       - name: Push and Deploy
-        if: inputs.deploy_to_staging && secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_to_staging && secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           IMAGE_TAG=$(date +%Y%m%d%H%M%S)
-          docker tag module5-ci:latest ${{ secrets.DOCKER_USERNAME }}/module5:staging-$IMAGE_TAG
-          docker push ${{ secrets.DOCKER_USERNAME }}/module5:staging-$IMAGE_TAG
-          echo "Deployed: ${{ secrets.DOCKER_USERNAME }}/module5:staging-$IMAGE_TAG"
+          docker tag module5-ci:latest $DOCKER_USERNAME/module5:staging-$IMAGE_TAG
+          docker push $DOCKER_USERNAME/module5:staging-$IMAGE_TAG
+          echo "Deployed: $DOCKER_USERNAME/module5:staging-$IMAGE_TAG"
 
       - name: Notify PR
         if: github.event_name == 'pull_request'
